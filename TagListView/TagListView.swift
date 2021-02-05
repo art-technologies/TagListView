@@ -227,11 +227,11 @@ open class TagListView: UIView {
     }
     
     private func rearrangeViews() {
-        let views = tagViews as [UIView] + tagBackgroundViews + rowViews
+        let views = tagViews as [UIView] + tagBackgroundViews //+ rowViews
         views.forEach {
             $0.removeFromSuperview()
         }
-        rowViews.removeAll(keepingCapacity: true)
+        //rowViews.removeAll(keepingCapacity: true)
 
         var isRtl: Bool = false
         
@@ -255,7 +255,9 @@ open class TagListView: UIView {
         }
         
         var currentRow = 0
-        var currentRowView: UIView!
+        var currentRowOrigin: CGPoint = .zero
+        var rowItems: [UIView] = []
+        var rowOffsets: [CGFloat] = []
         var currentRowTagCount = 0
         var currentRowWidth: CGFloat = 0
         let frameWidth = frame.width
@@ -264,29 +266,46 @@ open class TagListView: UIView {
             ? CGAffineTransform(scaleX: -1.0, y: 1.0)
             : CGAffineTransform.identity
         
+        func addRow() {
+            switch alignment {
+            case .leading: fallthrough // switch must be exahutive
+            case .left:
+                currentRowOrigin.x = 0
+            case .center:
+                currentRowOrigin.x = (frameWidth - (currentRowWidth - marginX)) / 2
+            case .trailing: fallthrough // switch must be exahutive
+            case .right:
+                currentRowOrigin.x = frameWidth - (currentRowWidth - marginX)
+            }
+            let items = isRtl ? rowItems.reversed() : rowItems
+            for (idx, item) in items.enumerated() {
+                item.frame.origin = CGPoint(
+                    x: currentRowOrigin.x + rowOffsets[idx],
+                    y: currentRowOrigin.y)
+                addSubview(item)
+            }
+            rowItems.removeAll()
+            rowOffsets.removeAll()
+        }
+        
         for (index, tagView) in tagViews.enumerated() {
             tagView.frame.size = tagView.intrinsicContentSize
             tagViewHeight = tagView.frame.height
             
             if currentRowTagCount == 0 || currentRowWidth + tagView.frame.width > frameWidth {
+                addRow()
+                
                 currentRow += 1
                 currentRowWidth = 0
                 currentRowTagCount = 0
-                currentRowView = UIView()
-                currentRowView.transform = directionTransform
-                currentRowView.frame.origin.y = CGFloat(currentRow - 1) * (tagViewHeight + marginY)
+                currentRowOrigin.y = CGFloat(currentRow - 1) * (tagViewHeight + marginY)
+                currentRowOrigin.x = 0
                 
-                rowViews.append(currentRowView)
-                addSubview(currentRowView)
-
                 tagView.frame.size.width = min(tagView.frame.size.width, frameWidth)
             }
             
             let tagBackgroundView = tagBackgroundViews[index]
             tagBackgroundView.transform = directionTransform
-            tagBackgroundView.frame.origin = CGPoint(
-                x: currentRowWidth,
-                y: 0)
             tagBackgroundView.frame.size = tagView.bounds.size
             tagBackgroundView.layer.shadowColor = shadowColor.cgColor
             tagBackgroundView.layer.shadowPath = UIBezierPath(roundedRect: tagBackgroundView.bounds, cornerRadius: cornerRadius).cgPath
@@ -294,24 +313,13 @@ open class TagListView: UIView {
             tagBackgroundView.layer.shadowOpacity = shadowOpacity
             tagBackgroundView.layer.shadowRadius = shadowRadius
             tagBackgroundView.addSubview(tagView)
-            currentRowView.addSubview(tagBackgroundView)
+            rowItems.append(tagBackgroundView)
+            rowOffsets.append(currentRowWidth)
             
             currentRowTagCount += 1
             currentRowWidth += tagView.frame.width + marginX
-            
-            switch alignment {
-            case .leading: fallthrough // switch must be exahutive
-            case .left:
-                currentRowView.frame.origin.x = 0
-            case .center:
-                currentRowView.frame.origin.x = (frameWidth - (currentRowWidth - marginX)) / 2
-            case .trailing: fallthrough // switch must be exahutive
-            case .right:
-                currentRowView.frame.origin.x = frameWidth - (currentRowWidth - marginX)
-            }
-            currentRowView.frame.size.width = currentRowWidth
-            currentRowView.frame.size.height = max(tagViewHeight, currentRowView.frame.height)
         }
+        addRow()
         rows = currentRow
         
         invalidateIntrinsicContentSize()
